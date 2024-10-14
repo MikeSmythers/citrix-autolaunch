@@ -53,12 +53,15 @@ impl Settings {
 /// - Validates URL prior to saving
 fn create_settings(reason: &str) -> Result<Settings, String> {
     spit(reason);
-    let base_uri = input("Base URI: ");
+    let base_uri = input("Base URI (https): ");
     spit("Verifying gateway...");
     let input_uri = match Url::parse(&base_uri) {
         Ok(u) => u,
         Err(e) => return Err(format!("Invalid URI: {:?}", e)),
     };
+    if input_uri.scheme() != "https" {
+        return Err("URI must use HTTPS.".to_string());
+    }
     match reqwest::blocking::get(input_uri) {
         Ok(r) => {
             let response = match r.text() {
