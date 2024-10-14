@@ -1,15 +1,20 @@
 use crate::{
-    extract::{self, get_attribute_value, get_element_value, get_header_attribute},
+    extract::{get_attribute_value, get_cookie_value, get_element_value, get_header_attribute},
     storage::Settings,
 };
 use reqwest::{
-    blocking::Client,
+    blocking::{self, Client},
     cookie::Jar,
     header::{HeaderMap, HeaderName, HeaderValue, CONTENT_LENGTH, HOST, ORIGIN, REFERER},
     Url,
 };
 use serde::Deserialize;
-use std::{str::FromStr, sync::Arc};
+use std::{
+    fs::File,
+    io::copy,
+    str::{from_utf8, FromStr},
+    sync::Arc,
+};
 use sysinfo::System;
 
 /// Simplified header object for Reqwest
@@ -123,7 +128,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     };
 
     // Get Initial URL from base URL (usually Logon/LogonPoint)
-    let response = match reqwest::blocking::get(base_url.clone()) {
+    let response = match blocking::get(base_url.clone()) {
         Ok(r) => r,
         Err(e) => return Err(format!("Failed to get base URL: {}", e)),
     };
@@ -233,7 +238,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
         Ok(i) => i,
         Err(e) => return Err(format!("Failed to retrieve state context: {}", e)),
     };
-    let state_context = match extract::get_element_value(&input, "StateContext") {
+    let state_context = match get_element_value(&input, "StateContext") {
         Ok(s) => s.to_string(),
         Err(e) => return Err(format!("Failed to parse state context: {}", e)),
     };
@@ -344,7 +349,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
         Ok(r) => r,
         Err(e) => return Err(format!("Failed to retrieve csrf token: {}", e)),
     };
-    let csrf_token = match extract::get_cookie_value(response.headers(), "CsrfToken") {
+    let csrf_token = match get_cookie_value(response.headers(), "CsrfToken") {
         Ok(c) => c.to_string(),
         Err(e) => return Err(format!("Failed to get csrf token: {}", e)),
     };
@@ -440,7 +445,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
             Ok(h) => h,
             Err(e) => return Err(e),
         })
-        .header(reqwest::header::CONTENT_LENGTH, "0")
+        .header(CONTENT_LENGTH, "0")
         .send()
     {
         Ok(r) => r,
@@ -468,7 +473,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
             Ok(h) => h,
             Err(e) => return Err(e),
         })
-        .header(reqwest::header::CONTENT_LENGTH, "0")
+        .header(CONTENT_LENGTH, "0")
         .send()
     {
         Ok(_) => (),
@@ -520,7 +525,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
         None => return Err("Resource not found".to_string()),
     };
 
-    // Get ICA file from StoreFront using full URL
+    // Get ICA file from StoreFront using full URL and validate
     // TODO: Add this url build to the url build function
     let file_name = "AutoLaunch.ica";
     let url = match base_url.join(&format!("{}{}", &internal_url, &url_result)) {
@@ -535,7 +540,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
         Ok(r) => r,
         Err(e) => return Err(format!("Failed to download file: {:?}", e)),
     };
-    let mut file = match std::fs::File::create(file_name) {
+    let mut file = match File::create(file_name) {
         Ok(f) => f,
         Err(e) => return Err(format!("Failed to create file: {:?}", e)),
     };
@@ -543,10 +548,16 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
         Ok(f) => f,
         Err(e) => return Err(format!("Failed to get file bytes: {:?}", e)),
     };
-    // TODO: Check that file_response contains [WFClient] for validity
-    let mut content = std::io::Cursor::new(file_response);
-    match std::io::copy(&mut content, &mut file) {
-        Ok(_) => Ok(file_name.to_string()),
-        Err(e) => Err(format!("Failed to write file: {:?}", e)),
+    let file_response_string = match from_utf8(&file_response) {
+        Ok(f) => f,
+        Err(e) => return Err(format!("Failed to convert file bytes: {:?}", e)),
+    };
+    if file_response_string.contains("[WFClient]") {
+        match copy(&mut file_response.as_ref(), &mut file) {
+            Ok(_) => Ok(file_name.to_string()),
+            Err(e) => Err(format!("Failed to write file: {:?}", e)),
+        }
+    } else {
+        Err("Invalid ICA file".to_string())
     }
 }
