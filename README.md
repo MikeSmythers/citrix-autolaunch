@@ -71,5 +71,4 @@ This has only been tested on Windows 10/11 and MacOS. If you feel like running i
 
 ## Known Issues
 
-* On connection close or remote program crash, this program may try to launch a bad or missing ICA, causing an error message to appear on screen
 * Sometimes repeatedly errors when trying to log in or download the ICA due to network delays (most notable when using MFA or similar)
