@@ -1,46 +1,11 @@
 use const_random::const_random;
 use hex;
 
-/// Generate a key at compile time which persists for all runs\
-/// *Note: This code isn't lazy. 32 individual random numbers are generated at compile time.*
+/// Generate a key at compile time which persists for all runs (128-bit key)\
 /// - Re-compiling code will generate a new key
 /// - Otherwise, the key persists for future runs
 fn get_key() -> String {
-    let hex_chars: Vec<char> = "0123456789abcdef".chars().collect();
-    let mut key = String::new();
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key.push(hex_chars[const_random!(u8) as usize % 16]);
-    key
+    format!("{:x}", const_random!(u128))
 }
 
 /// Encrypt a string
