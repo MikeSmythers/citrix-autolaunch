@@ -94,9 +94,11 @@ fn main() {
             State::ReadyToLaunch => {
                 // Launch ICA file in default application
                 spit("Launching file...");
-                match launch_file(file_name.as_str()) {
+                let target = file_name.clone();
+                file_name = String::new();
+                match launch_file(target.as_str()) {
                     Ok(_) => {
-                        let msg = format!("File launched successfully: {}", file_name);
+                        let msg = format!("File launched successfully: {}", target);
                         spit(msg);
                         sleep(std::time::Duration::from_secs(5));
                     }
