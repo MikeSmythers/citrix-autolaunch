@@ -1,0 +1,19 @@
+[package]
+name = "citrix-autolaunch"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+const-random = "0.1.18"
+crypter = "0.2.1"
+hex = "0.4.3"
+open = "5.3.0"
+regex = "1.10.6"
+reqwest = { version = "0.12.7", features = ["blocking", "cookies", "json", "multipart"] }
+serde = { version = "1.0.210", features = ["derive"] }
+serde-xml-rs = "0.6.0"
+serde_json = "1.0.128"
+sysinfo = "0.32.0"
+time = "0.3.36"
+windows-sys = { version = "0.59.0", features = ["Win32_UI_WindowsAndMessaging"] }
+wmctrl = "0.1.8"

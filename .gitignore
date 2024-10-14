@@ -1,0 +1,4 @@
+/target
+settings.*
+*.ica
+Cargo.lock
