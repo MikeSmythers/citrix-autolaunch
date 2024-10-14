@@ -17,7 +17,7 @@ struct ProtoHeader(HeaderName, HeaderValue);
 
 /// Response object from Citrix StoreFront
 // Commented items are likely present but not used
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ResourceList {
     // is_subscription_enabled: Option<bool>,
@@ -27,7 +27,7 @@ struct ResourceList {
 
 /// Resource object from Citrix StoreFront
 // Commented items are likely present but not used
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Resource {
     // clienttypes: Option<Vec<String>>,

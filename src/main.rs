@@ -11,8 +11,8 @@ mod storage;
 use citrix::{get_ica_file, ica_is_running};
 use io::spit;
 use maximize::maximize_window;
-use std::thread::sleep;
-use storage::launch_file;
+use std::{thread::sleep, time::Duration};
+use storage::{launch_file, Settings};
 
 /// Application state options
 enum State {
@@ -37,7 +37,7 @@ enum State {
 ///     - Errors result in 5 second delay
 fn main() {
     let mut state: State;
-    let mut settings = storage::Settings::default();
+    let mut settings = Settings::default();
     let mut file_name = String::new();
     loop {
         // Check and set state
@@ -65,9 +65,9 @@ fn main() {
                             "Error: {}\r\n\r\nFailed to get settings. Retrying in 5 seconds.",
                             e
                         );
-                        settings = storage::Settings::default();
+                        settings = Settings::default();
                         spit(msg);
-                        sleep(std::time::Duration::from_secs(5));
+                        sleep(Duration::from_secs(5));
                     }
                 };
             }
@@ -85,9 +85,9 @@ fn main() {
                             e
                         );
                         spit(msg);
-                        settings = storage::Settings::default();
+                        settings = Settings::default();
                         file_name = String::new();
-                        sleep(std::time::Duration::from_secs(5));
+                        sleep(Duration::from_secs(5));
                     }
                 };
             }
@@ -100,7 +100,7 @@ fn main() {
                     Ok(_) => {
                         let msg = format!("File launched successfully: {}", target);
                         spit(msg);
-                        sleep(std::time::Duration::from_secs(5));
+                        sleep(Duration::from_secs(5));
                     }
                     Err(e) => {
                         let msg = format!(
@@ -109,7 +109,7 @@ fn main() {
                         );
                         spit(msg);
                         file_name = String::new();
-                        sleep(std::time::Duration::from_secs(5));
+                        sleep(Duration::from_secs(5));
                     }
                 };
             }
@@ -118,7 +118,7 @@ fn main() {
                 if settings.maximization_active {
                     maximize_window(&settings.target);
                 }
-                sleep(std::time::Duration::from_secs(1));
+                sleep(Duration::from_secs(1));
             }
         }
     }
