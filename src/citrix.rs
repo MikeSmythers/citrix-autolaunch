@@ -207,7 +207,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
         Ok(r) => r,
         Err(e) => return Err(format!("Failed to post auth methods: {}", e)),
     };
-    // TODO: Make this less hacky...
+    // TODO: [ISSUE 6] Make this less hacky...
     let body = match response.text() {
         Ok(b) => b,
         Err(e) => return Err(format!("Failed to retrieve auth methods: {}", e)),
@@ -455,7 +455,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
         Ok(i) => i,
         Err(e) => return Err(format!("Failed to get auth methods: {}", e)),
     };
-    // TODO: Make this less hacky...
+    // TODO: [ISSUE 6] Make this less hacky...
     let auth_login_path = match get_attribute_value(&input, "method name=\"CitrixAGBasic\"", "url")
     {
         Ok(a) => a,
