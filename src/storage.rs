@@ -1,15 +1,17 @@
-use std::path::Path;
-
-use reqwest::Url;
-
-use crate::crypto::{decrypt, encrypt};
-use crate::io::{input, spit};
+use crate::{
+    crypto::{decrypt_string, encrypt_string},
+    io::{input, spit},
+};
+use reqwest::{blocking, Url};
+use serde::{Deserialize, Serialize};
+use serde_json::{from_str, to_string};
+use std::{fs, path::Path};
 
 // TODO: Allow user to modify location and name of settings file
 const SETTINGS_FILE: &str = "settings.txt";
 
 /// User entered settings for the application
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(Deserialize, Serialize)]
 pub struct Settings {
     pub base_uri: String,
     pub application_name: String,
@@ -62,7 +64,7 @@ fn create_settings(reason: &str) -> Result<Settings, String> {
     if input_uri.scheme() != "https" {
         return Err("URI must use HTTPS.".to_string());
     }
-    match reqwest::blocking::get(input_uri) {
+    match blocking::get(input_uri) {
         Ok(r) => {
             let response = match r.text() {
                 Ok(t) => t,
@@ -118,7 +120,7 @@ pub fn get_settings() -> Result<Settings, String> {
     // - If file is empty, corrupted, or unreadable, create new settings
     // TODO: Is this creating a race condition when file disappears or no perm to read?
     let f =
-        match std::fs::read_to_string(&SETTINGS_FILE) {
+        match fs::read_to_string(&SETTINGS_FILE) {
             Ok(f) => f,
             Err(_) => return create_settings(
                 "A settings file was found, but it's unreadable.\r\nLet's make a new one!\r\n\r\n",
@@ -134,7 +136,7 @@ pub fn get_settings() -> Result<Settings, String> {
     // Attempt to decrypt settings file
     // - If encryption key doesn't match (or other errors occur), create new settings
     let d =
-        match decrypt(f) {
+        match decrypt_string(f) {
             Ok(d) => d,
             Err(_) => return create_settings(
                 "A settings file was found, but the encryption key doesn't match.\r\nLet's make a new one!\r\n\r\n",
@@ -142,7 +144,7 @@ pub fn get_settings() -> Result<Settings, String> {
         };
     // Attempt to deserialize settings file
     // - If file is corrupted or data format doesn't match Settings struct, create new settings
-    match serde_json::from_str(&d) {
+    match from_str(&d) {
         Ok(s) => Ok(s),
         Err(_) => create_settings(
             "A settings file was found, but it's corrupted.\r\nLet's make a new one!\r\n\r\n",
@@ -154,15 +156,15 @@ pub fn get_settings() -> Result<Settings, String> {
 /// - Encrypts Settings before saving
 /// - Returns Result<(), String>
 pub fn save_settings(settings: &Settings) -> Result<(), String> {
-    let serialized = match serde_json::to_string(&settings) {
+    let serialized = match to_string(&settings) {
         Ok(s) => s,
         Err(e) => return Err(format!("Failed to serialize settings: {:?}", e)),
     };
-    let encrypted = match encrypt(&serialized) {
+    let encrypted = match encrypt_string(&serialized) {
         Ok(e) => e,
         Err(e) => return Err(format!("Failed to encrypt settings: {:?}", e)),
     };
-    match std::fs::write(SETTINGS_FILE, encrypted) {
+    match fs::write(SETTINGS_FILE, encrypted) {
         Ok(_) => Ok(()),
         Err(e) => Err(format!("Failed to write settings file: {:?}", e)),
     }
