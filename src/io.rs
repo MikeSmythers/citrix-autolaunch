@@ -32,6 +32,7 @@ pub fn spit(content: impl Display) {
 /// - If the file does not exist, it is created
 /// - If the file exists, the log is appended
 /// - If the file is longer than 500 lines, only the last 500 lines are kept
+/// - Condenses consecutive repeated lines with quantity marker
 /// - Does not return anything
 pub fn log_to_file(input: &str) {
     // Open file
@@ -67,8 +68,11 @@ pub fn log_to_file(input: &str) {
         }
     }
 
-    // Append and write (ignore errors)
-    content.push_str(new_line);
+    // Append or condense
+    if content.len() > 0 {
+    } else {
+        content.push_str(new_line);
+    }
     if let Ok(_) = std::fs::write(LOG_FILE, content) {}
 }
 
@@ -79,4 +83,31 @@ pub fn log_to_file(input: &str) {
 pub fn spit_and_log(input: &str) {
     log_to_file(&input);
     spit(&input);
+}
+
+fn condense_repetition(content: &str, input: &str) -> String {
+    let lines = content.lines().collect::<Vec<&str>>();
+    println!("{:?}", lines);
+    if let Some(last_line) = lines.last() {
+        if !last_line.contains(']') {
+            return input.to_string();
+        }
+        let last_line_text = last_line.split(']').collect::<Vec<&str>>()[1].trim();
+        if last_line_text == input.trim() {
+            return format!("{} (2)", input);
+        }
+        if last_line_text.starts_with(format!("{} (", input).as_str()) {
+            let count = last_line_text
+                .split(' ')
+                .collect::<Vec<&str>>()
+                .last()
+                .unwrap()
+                .replace("(", "")
+                .replace(")", "")
+                .parse::<u32>()
+                .unwrap();
+            return format!("{} ({})\n", input, count + 1);
+        }
+    }
+    return input.to_string();
 }
