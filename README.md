@@ -60,7 +60,7 @@ Should your settings become invalid, there is no option at this time to re-enter
 There are very few requirements for this to run...
 
 * Must have execute permissions to the program and directory
-* Must have write permissions to create new files in directory for both settings and the ICA file
+* Must have write permissions to create new files in directory for settings, ICA, and log file
 * Must have access to the StoreFront server or NetScaler on port 443
 
 ## Compatibility
