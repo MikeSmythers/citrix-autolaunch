@@ -12,16 +12,10 @@ const LOG_FILE: &str = "log.txt";
 pub fn input(prompt: &str) -> String {
     print!("{}", prompt);
     // Flush STDOUT; ignore errors
-    match stdout().flush() {
-        Ok(_) => {}
-        Err(_) => {}
-    };
+    if let Ok(_) = stdout().flush() {}
     let mut input = String::new();
     // Get user input; ignore errors
-    match stdin().read_line(&mut input) {
-        Ok(_) => {}
-        Err(_) => {}
-    };
+    if let Ok(_) = stdin().read_line(&mut input) {}
     input.trim().to_string()
 }
 
@@ -73,13 +67,9 @@ pub fn log_to_file(input: &str) {
         }
     }
 
-    // Append and write
+    // Append and write (ignore errors)
     content.push_str(new_line);
-    let result = std::fs::write(LOG_FILE, content);
-    match result {
-        Ok(_) => {}
-        Err(_) => {}
-    };
+    if let Ok(_) = std::fs::write(LOG_FILE, content) {}
 }
 
 /// Combination of input and spit
