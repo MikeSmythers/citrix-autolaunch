@@ -1,3 +1,5 @@
+#[cfg(not(target_os = "windows"))]
+use crate::io::spit_and_log;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::Foundation::{HWND, LPARAM};
 #[cfg(target_os = "windows")]
@@ -41,6 +43,6 @@ pub fn maximize_window(target: &str) {
 /// Placeholder function for non-Windows operating systems
 /// - Prints a message to the console
 pub fn maximize_window(target: &str) {
-    spit(target);
-    spit("Maximize window not supported on this platform.");
+    spit_and_log(target);
+    spit_and_log("Maximize window not supported on this platform.");
 }
