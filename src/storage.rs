@@ -1,6 +1,6 @@
 use crate::{
     crypto::{decrypt_string, encrypt_string},
-    io::{input, spit},
+    io::{input, spit_and_log},
 };
 use reqwest::{blocking, Url};
 use serde::{Deserialize, Serialize};
@@ -54,9 +54,9 @@ impl Settings {
 /// Create and save Settings from user input
 /// - Validates URL prior to saving
 fn create_settings(reason: &str) -> Result<Settings, String> {
-    spit(reason);
+    spit_and_log(reason);
     let base_uri = input("Base URI (https): ");
-    spit("Verifying gateway...");
+    spit_and_log("Verifying gateway...");
     let input_uri = match Url::parse(&base_uri) {
         Ok(u) => u,
         Err(e) => return Err(format!("Invalid URI: {:?}", e)),
@@ -71,7 +71,7 @@ fn create_settings(reason: &str) -> Result<Settings, String> {
                 Err(e) => return Err(format!("Failed to read response: {:?}", e)),
             };
             if response.contains("Citrix") {
-                spit("Gateway verified.");
+                spit_and_log("Gateway verified.");
             } else {
                 return Err("Gateway not recognized.".to_string());
             }

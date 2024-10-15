@@ -9,7 +9,7 @@ mod io;
 mod maximize;
 mod storage;
 use citrix::{get_ica_file, ica_is_running};
-use io::spit;
+use io::spit_and_log;
 use maximize::maximize_window;
 use std::{thread::sleep, time::Duration};
 use storage::{launch_file, Settings};
@@ -54,11 +54,11 @@ fn main() {
         match state {
             State::Initialization => {
                 // Attempt to get settings from file or user input
-                spit("Initializing...");
+                spit_and_log("Initializing...");
                 match storage::get_settings() {
                     Ok(s) => {
                         settings = s;
-                        spit("Settings loaded successfully.");
+                        spit_and_log("Settings loaded successfully.");
                     }
                     Err(e) => {
                         let msg = format!(
@@ -66,25 +66,25 @@ fn main() {
                             e
                         );
                         settings = Settings::default();
-                        spit(msg);
+                        spit_and_log(&msg);
                         sleep(Duration::from_secs(5));
                     }
                 };
             }
             State::ReadyToLogIn => {
                 // Log into Citrix StoreFront and get ICA file
-                spit("Logging in...");
+                spit_and_log("Logging in...");
                 match get_ica_file(&settings) {
                     Ok(f) => {
                         file_name = f;
-                        spit("ICA file downloaded successfully.");
+                        spit_and_log("ICA file downloaded successfully.");
                     }
                     Err(e) => {
                         let msg = format!(
                             "Error: {}\r\n\r\nFailed to get ICA file. Retrying in 5 seconds.",
                             e
                         );
-                        spit(msg);
+                        spit_and_log(&msg);
                         settings = Settings::default();
                         file_name = String::new();
                         sleep(Duration::from_secs(5));
@@ -93,13 +93,13 @@ fn main() {
             }
             State::ReadyToLaunch => {
                 // Launch ICA file in default application
-                spit("Launching file...");
+                spit_and_log("Launching file...");
                 let target = file_name.clone();
                 file_name = String::new();
                 match launch_file(target.as_str()) {
                     Ok(_) => {
                         let msg = format!("File launched successfully: {}", target);
-                        spit(msg);
+                        spit_and_log(&msg);
                         sleep(Duration::from_secs(5));
                     }
                     Err(e) => {
@@ -107,7 +107,7 @@ fn main() {
                             "Error: {}\r\n\r\nFailed to launch file. Retrying in 5 seconds.",
                             e
                         );
-                        spit(msg);
+                        spit_and_log(&msg);
                         file_name = String::new();
                         sleep(Duration::from_secs(5));
                     }
