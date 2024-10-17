@@ -49,6 +49,8 @@ fn main() {
             state = State::ReadyToLogIn;
         } else {
             state = State::ReadyToLaunch;
+            // TAKE THIS OUT - exit program for testing
+            break;
         }
         // Perform actions based on state
         match state {

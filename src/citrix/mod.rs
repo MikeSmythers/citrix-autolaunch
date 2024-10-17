@@ -1,168 +1,71 @@
+mod functions;
+mod objects;
 use crate::{
     extract::{get_attribute_value, get_cookie_value, get_element_value, get_header_attribute},
     storage::Settings,
 };
+use functions::common_headers;
+pub use functions::ica_is_running;
+use objects::{ProtoHeader, Resource, ResourceList};
 use reqwest::{
     blocking::{self, Client},
     cookie::Jar,
-    header::{HeaderMap, HeaderName, HeaderValue, CONTENT_LENGTH, HOST, ORIGIN, REFERER},
+    header::{HeaderName, HeaderValue, CONTENT_LENGTH, REFERER},
     Url,
 };
-use serde::Deserialize;
 use std::{
     fs::File,
     io::copy,
     str::{from_utf8, FromStr},
     sync::Arc,
 };
-use sysinfo::System;
-
-/// Simplified header object for Reqwest
-struct ProtoHeader(HeaderName, HeaderValue);
-
-/// Response object from Citrix StoreFront
-// Commented items are likely present but not used
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ResourceList {
-    // is_subscription_enabled: Option<bool>,
-    // is_unauthenticated_user: Option<bool>,
-    resources: Option<Vec<Resource>>, // List of resources from Citrix StoreFront
-}
-
-/// Resource object from Citrix StoreFront
-// Commented items are likely present but not used
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Resource {
-    // clienttypes: Option<Vec<String>>,
-    // description: Option<String>,
-    // iconurl: Option<String>,
-    // id: Option<String>,
-    // launchstatusurl: Option<String>,
-    // path: Option<String>,
-    // shortcutvalidationurl: Option<String>,
-    // subscriptionurl: Option<String>,
-    launchurl: Option<String>, // Part of URL for ICA file download
-    name: Option<String>,      // Name of resource as seen in Citrix StoreFront
-}
-
-/// Headers used for Citrix StoreFront requests\
-/// **Note: These headers are required for correct StoreFront interaction**
-/// - Includes common headers and optional custom headers
-/// - Custom headers are used for CSRF token and Referer
-/// - Custom headers are not required for all requests
-/// - Accepts an optional vector of ProtoHeader objects provided by function call
-/// - Returns a completed Reqwest HeaderMap object
-fn common_headers(
-    custom: Option<&Vec<ProtoHeader>>,
-    settings: &Settings,
-) -> Result<HeaderMap, String> {
-    let base_uri: Url = match Url::parse(&settings.base_uri) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to parse base URI: {}", e)),
-    };
-    let host_domain = match HeaderValue::from_str(match &base_uri.domain() {
-        Some(d) => d,
-        None => return Err(String::from("Failed to parse domain for base URI.")),
-    }) {
-        Ok(h) => h,
-        Err(e) => return Err(format!("Failed to create base URI header: {}", e)),
-    };
-    let origin_base_uri = match HeaderValue::from_str(&base_uri.to_string()) {
-        Ok(h) => h,
-        Err(e) => return Err(format!("Failed to create base URI header: {}", e)),
-    };
-    let mut headers: HeaderMap = HeaderMap::new();
-    let x_citrix_isusinghttps = match HeaderName::from_str("X-Citrix-Isusinghttps") {
-        Ok(h) => h,
-        Err(e) => return Err(format!("Failed to create header: {}", e)),
-    };
-    let x_requested_with: HeaderName = match HeaderName::from_str("X-Requested-With") {
-        Ok(h) => h,
-        Err(e) => return Err(format!("Failed to create header: {}", e)),
-    };
-    headers.insert(HOST, host_domain);
-    headers.insert(ORIGIN, origin_base_uri);
-    headers.insert(x_citrix_isusinghttps, HeaderValue::from_static("Yes"));
-    headers.insert(x_requested_with, HeaderValue::from_static("XMLHttpRequest"));
-    if let Some(custom) = custom {
-        for ProtoHeader(name, value) in custom {
-            headers.insert(name, value.clone());
-        }
-    }
-    Ok(headers)
-}
 
 // TODO: Add URL builder function to provide full URLs for below function
-
-/// Check if Citrix Workspace is running
-/// - Uses sysinfo crate to check for wfica32.exe process
-/// - Returns true if process is found, false otherwise
-pub fn ica_is_running() -> bool {
-    let mut system = System::new();
-    system.refresh_all();
-    let processes = system.processes();
-    if processes.iter().any(|(_, p)| p.name() == "wfica32.exe") {
-        true
-    } else {
-        false
-    }
-}
 
 /// Get ICA file from Citrix StoreFront
 /// - Uses Reqwest to interact with Citrix StoreFront
 /// - Requires a Settings object with login and passwd fields
 /// - Returns a Result with the file name on success, error message on failure
 pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
-    let application_name = settings.application_name.clone();
-    let base_url = match Url::parse(&settings.base_uri) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to parse base URI: {}", e)),
-    };
-    // Client setup
+    let base_url =
+        Url::parse(&settings.base_uri).map_err(|e| format!("Failed to parse base URI: {}", e))?;
     let jar = Arc::new(Jar::default());
-    let client = match Client::builder().cookie_provider(Arc::clone(&jar)).build() {
-        Ok(c) => c,
-        Err(e) => return Err(format!("Failed to build client: {}", e)),
-    };
+    let client = Client::builder()
+        .cookie_provider(Arc::clone(&jar))
+        .build()
+        .map_err(|e| format!("Failed to build client: {}", e))?;
 
-    // Get Initial URL from base URL (usually Logon/LogonPoint)
-    let response = match blocking::get(base_url.clone()) {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to get base URL: {}", e)),
-    };
-    let initial_url = match response.url().join("./") {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
+    // [Initial] Get Initial URL from base URL (usually Logon/LogonPoint)
+    let response = blocking::get(base_url.clone())
+        .map_err(|e| format!("Failed to build URI [Initial]: {}", e))?;
+    let initial_url = response
+        .url()
+        .join("./")
+        .map_err(|e| format!("Failed to request [Initial]: {}", e))?;
 
-    // Call to Home/Configuration for Resource List path
-    // Note that Home/Configuration seems to be a default path for the API
-    let uri = match initial_url.join("Home/Configuration") {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    let response = match client
+    // [Home1] Call to (this is a default) Home/Configuration for Resource List path
+    let uri = initial_url
+        .join("Home/Configuration")
+        .map_err(|e| format!("Failed to build URI [Home1]: {}", e))?;
+    let response = client
         .post(uri)
-        .headers(match common_headers(None, settings) {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        })
-        .header(CONTENT_LENGTH, "0")
+        .headers(
+            common_headers(
+                Some(&vec![ProtoHeader(
+                    CONTENT_LENGTH,
+                    HeaderValue::from_static("0"),
+                )]),
+                &settings.base_uri,
+            )
+            .map_err(|e| format!("Failed to build headers [Home1]: {}", e))?,
+        )
         .send()
-    {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to post configuration: {}", e)),
-    };
-    let body = match response.text() {
-        Ok(b) => b,
-        Err(e) => return Err(format!("Failed to retrieve configuration: {}", e)),
-    };
-    let resource_list_path = match get_attribute_value(&body, "resourcesProxy", "listURL") {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to get resource list path: {}", e)),
-    };
+        .map_err(|e| format!("Failed to request [Home1]: {}", e))?;
+    let body = response
+        .text()
+        .map_err(|e| format!("Failed to retrieve configuration [Home1]: {}", e))?;
+    let resource_list_path = get_attribute_value(&body, "resourcesProxy", "listURL")
+        .map_err(|e| format!("Failed to retrieve path [Home1]: {}", e))?;
 
     // Call to Resource List for Auth Methods path
     let uri = match initial_url.join(&resource_list_path) {
@@ -171,7 +74,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     };
     let response = match client
         .post(uri)
-        .headers(match common_headers(None, settings) {
+        .headers(match common_headers(None, &settings.base_uri) {
             Ok(h) => h,
             Err(e) => return Err(e),
         })
@@ -197,7 +100,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     };
     let response = match client
         .post(uri)
-        .headers(match common_headers(None, settings) {
+        .headers(match common_headers(None, &settings.base_uri) {
             Ok(h) => h,
             Err(e) => return Err(e),
         })
@@ -225,7 +128,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     };
     let response = match client
         .post(uri)
-        .headers(match common_headers(None, settings) {
+        .headers(match common_headers(None, &settings.base_uri) {
             Ok(h) => h,
             Err(e) => return Err(e),
         })
@@ -261,7 +164,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     };
     let response = match client
         .post(uri)
-        .headers(match common_headers(None, settings) {
+        .headers(match common_headers(None, &settings.base_uri) {
             Ok(h) => h,
             Err(e) => return Err(e),
         })
@@ -295,7 +198,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     };
     match client
         .post(uri)
-        .headers(match common_headers(None, settings) {
+        .headers(match common_headers(None, &settings.base_uri) {
             Ok(h) => h,
             Err(e) => return Err(e),
         })
@@ -321,7 +224,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     let uri = internal_url.clone();
     match client
         .post(uri)
-        .headers(match common_headers(None, settings) {
+        .headers(match common_headers(None, &settings.base_uri) {
             Ok(h) => h,
             Err(e) => return Err(e),
         })
@@ -339,7 +242,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     };
     let response = match client
         .post(uri)
-        .headers(match common_headers(None, settings) {
+        .headers(match common_headers(None, &settings.base_uri) {
             Ok(h) => h,
             Err(e) => return Err(e),
         })
@@ -415,10 +318,12 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     };
     let response = match client
         .post(uri)
-        .headers(match common_headers(Some(&custom_headers), settings) {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        })
+        .headers(
+            match common_headers(Some(&custom_headers), &settings.base_uri) {
+                Ok(h) => h,
+                Err(e) => return Err(e),
+            },
+        )
         .form(get_list_settings)
         .send()
     {
@@ -441,10 +346,12 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     };
     let response = match client
         .post(uri)
-        .headers(match common_headers(Some(&custom_headers), settings) {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        })
+        .headers(
+            match common_headers(Some(&custom_headers), &settings.base_uri) {
+                Ok(h) => h,
+                Err(e) => return Err(e),
+            },
+        )
         .header(CONTENT_LENGTH, "0")
         .send()
     {
@@ -469,10 +376,12 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     };
     match client
         .post(uri)
-        .headers(match common_headers(Some(&custom_headers), settings) {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        })
+        .headers(
+            match common_headers(Some(&custom_headers), &settings.base_uri) {
+                Ok(h) => h,
+                Err(e) => return Err(e),
+            },
+        )
         .header(CONTENT_LENGTH, "0")
         .send()
     {
@@ -488,10 +397,12 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     };
     let response = match client
         .post(uri)
-        .headers(match common_headers(Some(&custom_headers), settings) {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        })
+        .headers(
+            match common_headers(Some(&custom_headers), &settings.base_uri) {
+                Ok(h) => h,
+                Err(e) => return Err(e),
+            },
+        )
         .form(get_list_settings)
         .send()
     {
@@ -516,7 +427,7 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     // Get ICA URL for target resource
     let url_result = match resource_list
         .iter()
-        .find(|r| r.name == Some(application_name.clone()))
+        .find(|r| r.name == Some(settings.application_name.clone()))
     {
         Some(r) => match r.launchurl.clone() {
             Some(u) => u,
