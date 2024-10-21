@@ -67,90 +67,68 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
     let resource_list_path = get_attribute_value(&body, "resourcesProxy", "listURL")
         .map_err(|e| format!("Failed to retrieve path [Home1]: {}", e))?;
 
-    // Call to Resource List for Auth Methods path
-    let uri = match initial_url.join(&resource_list_path) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    let response = match client
+    // [List1] Call to Resource List for Auth Methods path
+    let uri = initial_url
+        .join(&resource_list_path)
+        .map_err(|e| format!("Failed to build URI [List1]: {}", e))?;
+    let response = client
         .post(uri)
-        .headers(match common_headers(None, &settings.base_uri) {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        })
+        .headers(
+            common_headers(None, &settings.base_uri)
+                .map_err(|e| format!("Failed to build headers [List1]: {}", e))?,
+        )
         .header(CONTENT_LENGTH, "0")
         .send()
-    {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to post resource list: {}", e)),
-    };
-    let auth_methods_path = match get_header_attribute(
+        .map_err(|e| format!("Failed to request [List1]: {}", e))?;
+    let auth_methods_path = get_header_attribute(
         &response.headers(),
         "CitrixWebReceiver-Authenticate",
         "location",
-    ) {
-        Ok(a) => a,
-        Err(e) => return Err(format!("Failed to get auth methods path: {}", e)),
-    };
+    )
+    .map_err(|e| format!("Failed to retrieve path [List1]: {}", e))?;
 
-    // Call to Auth Methods Init for proper auth methods path
-    let uri = match initial_url.join(&auth_methods_path) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    let response = match client
+    // [AuthMethods1] Call to Auth Methods for proper auth methods path
+    let uri = initial_url
+        .join(&auth_methods_path)
+        .map_err(|e| format!("Failed to build URI [AuthMethods1]: {}", e))?;
+    let response = client
         .post(uri)
-        .headers(match common_headers(None, &settings.base_uri) {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        })
+        .headers(
+            common_headers(None, &settings.base_uri)
+                .map_err(|e| format!("Failed to build headers [AuthMethods1]: {}", e))?,
+        )
         .header(CONTENT_LENGTH, "0")
         .send()
-    {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to post auth methods: {}", e)),
-    };
+        .map_err(|e| format!("Failed to request [AuthMethods1]: {}", e))?;
     // TODO: [ISSUE 6] Make this less hacky...
-    let body = match response.text() {
-        Ok(b) => b,
-        Err(e) => return Err(format!("Failed to retrieve auth methods: {}", e)),
-    };
+    let body = response
+        .text()
+        .map_err(|e| format!("Failed to retrieve body [AuthMethods1]: {}", e))?;
     let auth_methods_proper_path =
-        match get_attribute_value(&body, "method name=\"ExplicitForms\"", "url") {
-            Ok(a) => a,
-            Err(e) => return Err(format!("Failed to get proper auth methods path: {}", e)),
-        };
+        get_attribute_value(&body, "method name=\"ExplicitForms\"", "url")
+            .map_err(|e| format!("Failed to retrieve path [AuthMethods1]: {}", e))?;
 
-    // Pull auth methods for state_context
-    let uri = match base_url.join(&auth_methods_proper_path) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    let response = match client
+    // [DoAuthMethods1] Pull auth methods for state_context
+    let uri = base_url
+        .join(&auth_methods_proper_path)
+        .map_err(|e| format!("Failed to build URI [DoAuthMethods1]: {}", e))?;
+    let response = client
         .post(uri)
-        .headers(match common_headers(None, &settings.base_uri) {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        })
+        .headers(
+            common_headers(None, &settings.base_uri)
+                .map_err(|e| format!("Failed to build headers [DoAuthMethods1]: {}", e))?,
+        )
         .send()
-    {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to post auth requirements (initial): {}", e)),
-    };
-    let input = match response.text() {
-        Ok(i) => i,
-        Err(e) => return Err(format!("Failed to retrieve state context: {}", e)),
-    };
-    let state_context = match get_element_value(&input, "StateContext") {
-        Ok(s) => s.to_string(),
-        Err(e) => return Err(format!("Failed to parse state context: {}", e)),
-    };
-    let auth_path = match get_element_value(&input, "Postback") {
-        Ok(a) => a,
-        Err(e) => return Err(format!("Failed to get auth path: {}", e)),
-    };
+        .map_err(|e| format!("Failed to request [DoAuthMethods1]: {}", e))?;
+    let input = response
+        .text()
+        .map_err(|e| format!("Failed to retrieve body [DoAuthMethods1]: {}", e))?;
+    let state_context = get_element_value(&input, "StateContext")
+        .map_err(|e| format!("Failed to retrieve state context [DoAuthMethods1]: {}", e))?;
+    let auth_path = get_element_value(&input, "Postback")
+        .map_err(|e| format!("Failed to retrieve auth path [DoAuthMethods1]: {}", e))?;
 
-    // Authenticate to StoreFront for AAAC cookie
+    // [DoAuth] Authenticate to StoreFront for AAAC cookie
     let credentials = &[
         ("login", settings.login.as_str()),
         ("passwd", settings.passwd.as_str()),
@@ -158,119 +136,91 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
         ("nsg-x1-logon-button", "Log On"),
         ("StateContext", state_context.as_str()),
     ];
-    let uri = match base_url.join(&auth_path) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    let response = match client
+    let uri = base_url
+        .join(&auth_path)
+        .map_err(|e| format!("Failed to build URI [DoAuth]: {}", e))?;
+    let response = client
         .post(uri)
-        .headers(match common_headers(None, &settings.base_uri) {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        })
+        .headers(
+            common_headers(None, &settings.base_uri)
+                .map_err(|e| format!("Failed to build headers [DoAuth]: {}", e))?,
+        )
         .form(credentials)
         .send()
-    {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to authenticate: {}", e)),
-    };
-    let input = match response.text() {
-        Ok(i) => i,
-        Err(e) => return Err(format!("Failed to retrieve auth response: {}", e)),
-    };
-    let set_client_path = match get_element_value(&input, "Postback") {
-        Ok(p) => p,
-        Err(_) => match get_element_value(&input, "RedirectURL") {
-            Ok(r) => r,
-            Err(e) => return Err(format!("Failed to get set client path: {}", e)),
-        },
-    };
+        .map_err(|e| format!("Failed to request [DoAuth]: {}", e))?;
+    let input = response
+        .text()
+        .map_err(|e| format!("Failed to retrieve auth response [DoAuth]: {}", e))?;
+    let set_client_path = get_element_value(&input, "Postback")
+        .or_else(|_| get_element_value(&input, "RedirectURL"))
+        .map_err(|e| format!("Failed to retrieve set client path [DoAuth]: {}", e))?;
 
-    // Set client (useful for who knows what)
+    // [SetClient] Set client (useful for who knows what)
     // TODO: Figure out what this does
     let set_client_settings = &[
         ("nsg-setclient", "wica"),
         ("StateContext", state_context.as_str()),
     ];
-    let uri = match base_url.join(&set_client_path) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    match client
+    let uri = base_url
+        .join(&set_client_path)
+        .map_err(|e| format!("Failed to build URI [SetClient]: {}", e))?;
+    client
         .post(uri)
-        .headers(match common_headers(None, &settings.base_uri) {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        })
+        .headers(
+            common_headers(None, &settings.base_uri)
+                .map_err(|e| format!("Failed to build headers [SetClient]: {}", e))?,
+        )
         .form(set_client_settings)
         .send()
-    {
-        Ok(_) => (),
-        Err(e) => return Err(format!("Failed to set client: {}", e)),
-    };
+        .map_err(|e| format!("Failed to request [SetClient]: {}", e))?;
 
-    // Get base_rui redirect for internal path
-    let response = match client.get(base_url.clone()).send() {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to get base URL: {}", e)),
-    };
+    // [Internal] Get base_rui redirect for internal path
+    let response = client
+        .get(base_url.clone())
+        .send()
+        .map_err(|e| format!("Failed to request [Internal]: {}", e))?;
     let internal_path = response.url().path();
-    let internal_url = match base_url.join(internal_path) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
+    let internal_url = base_url
+        .join(internal_path)
+        .map_err(|e| format!("Failed to build URI [Internal]: {}", e))?;
 
-    // Get request to internal URL to set up Home Configuration
+    // [Home2] Get request to internal URL to set up Home Configuration
     let uri = internal_url.clone();
-    match client
+    client
         .post(uri)
-        .headers(match common_headers(None, &settings.base_uri) {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        })
+        .headers(
+            common_headers(None, &settings.base_uri)
+                .map_err(|e| format!("Failed to build headers [Home2]: {}", e))?,
+        )
         .header(CONTENT_LENGTH, "0")
         .send()
-    {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to get internal URL: {}", e)),
-    };
+        .map_err(|e| format!("Failed to request [Home2]: {}", e))?;
 
-    // Get config for csrf_token
-    let uri = match internal_url.join("Home/Configuration") {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    let response = match client
+    // [Config] Get config for csrf_token
+    let uri = internal_url
+        .join("Home/Configuration")
+        .map_err(|e| format!("Failed to build URI [Config]: {}", e))?;
+    let response = client
         .post(uri)
-        .headers(match common_headers(None, &settings.base_uri) {
-            Ok(h) => h,
-            Err(e) => return Err(e),
-        })
+        .headers(
+            common_headers(None, &settings.base_uri)
+                .map_err(|e| format!("Failed to build headers [Config]: {}", e))?,
+        )
         .header(CONTENT_LENGTH, "0")
         .send()
-    {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to retrieve csrf token: {}", e)),
-    };
-    let csrf_token = match get_cookie_value(response.headers(), "CsrfToken") {
-        Ok(c) => c.to_string(),
-        Err(e) => return Err(format!("Failed to get csrf token: {}", e)),
-    };
-    let input = match response.text() {
-        Ok(i) => i,
-        Err(e) => return Err(format!("Failed to get csrf token: {}", e)),
-    };
-    let resource_list_path = match get_attribute_value(&input, "resourcesProxy", "listURL") {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to get resource list path: {}", e)),
-    };
+        .map_err(|e| format!("Failed to request [Config]: {}", e))?;
+    let csrf_token = get_cookie_value(response.headers(), "CsrfToken")
+        .map_err(|e| format!("Failed to retrieve csrf token [Config]: {}", e))?;
+    let input = response
+        .text()
+        .map_err(|e| format!("Failed to parse csrf token [Config]: {}", e))?;
+    let resource_list_path = get_attribute_value(&input, "resourcesProxy", "listURL")
+        .map_err(|e| format!("Failed to retrieve path [Config]: {}", e))?;
 
-    // Modify request schema
+    // [Schema] Modify request schema
     // Required for further StoreFront interaction
-    let csrf_token_header = match HeaderName::from_str("Csrf-Token") {
-        Ok(h) => h,
-        Err(_) => return Err("Failed to create csrf token header".to_string()),
-    };
+    let csrf_token_header = HeaderName::from_str("Csrf-Token")
+        .map_err(|e| format!("Failed to create csrf token header [Schema]: {}", e))?;
     let custom_headers: Vec<ProtoHeader> = vec![
         ProtoHeader(
             csrf_token_header,
@@ -278,16 +228,14 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
         ),
         ProtoHeader(
             REFERER,
-            match HeaderValue::from_str(&internal_url.to_string().as_str()) {
-                Ok(h) => h,
-                Err(e) => return Err(format!("Failed to create referer header: {}", e)),
-            },
+            HeaderValue::from_str(&internal_url.to_string().as_str())
+                .map_err(|e| format!("Failed to create referer header [Schema]: {}", e))?,
         ),
     ];
-    let cookie_domain = match base_url.domain() {
-        Some(d) => d,
-        None => return Err("Failed to parse domain".to_string()),
-    };
+    let cookie_domain = base_url
+        .domain()
+        .ok_or("Base URL returned no domain".to_string())
+        .map_err(|e| format!("Failed to parse cookie domain [Schema]: {}", e))?;
     jar.add_cookie_str(
         &format!(
             "CtxsClientDetectionDone=true; Domain={}; Path={}",
@@ -310,164 +258,118 @@ pub fn get_ica_file(settings: &Settings) -> Result<String, String> {
         &internal_url,
     );
 
-    // Get list (will fail) for CtxsDeviceId cookie
+    // [ListDoomed] Get list (will fail) for CtxsDeviceId cookie
     let get_list_settings = &[("format", "json"), ("resourceDetails", "Default")];
-    let uri = match internal_url.join(&resource_list_path) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    let response = match client
+    let uri = internal_url
+        .join(&resource_list_path)
+        .map_err(|e| format!("Failed to build URI [ListDoomed]: {}", e))?;
+    let response = client
         .post(uri)
         .headers(
-            match common_headers(Some(&custom_headers), &settings.base_uri) {
-                Ok(h) => h,
-                Err(e) => return Err(e),
-            },
+            common_headers(Some(&custom_headers), &settings.base_uri)
+                .map_err(|e| format!("Failed to build headers [ListDoomed]: {}", e))?,
         )
         .form(get_list_settings)
         .send()
-    {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to get (fake) resource list: {}", e)),
-    };
-    let auth_methods_path = match get_header_attribute(
+        .map_err(|e| format!("Failed to request [ListDoomed]: {}", e))?;
+    let auth_methods_path = get_header_attribute(
         &response.headers(),
         "CitrixWebReceiver-Authenticate",
         "location",
-    ) {
-        Ok(a) => a,
-        Err(e) => return Err(format!("Failed to get auth methods path: {}", e)),
-    };
+    )
+    .map_err(|e| format!("Failed to retrieve path [ListDoomed]: {}", e))?;
 
-    // Get auth methods (real) for CitrixAGBasic relative path
-    let uri = match internal_url.join(&auth_methods_path) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    let response = match client
+    // [AuthMethods2] Get auth methods (real) for CitrixAGBasic relative path
+    let uri = internal_url
+        .join(&auth_methods_path)
+        .map_err(|e| format!("Failed to build URI [AuthMethods2]: {}", e))?;
+    let response = client
         .post(uri)
         .headers(
-            match common_headers(Some(&custom_headers), &settings.base_uri) {
-                Ok(h) => h,
-                Err(e) => return Err(e),
-            },
+            common_headers(Some(&custom_headers), &settings.base_uri)
+                .map_err(|e| format!("Failed to build headers [AuthMethods2]: {}", e))?,
         )
         .header(CONTENT_LENGTH, "0")
         .send()
-    {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to get auth methods: {}", e)),
-    };
-    let input = match response.text() {
-        Ok(i) => i,
-        Err(e) => return Err(format!("Failed to get auth methods: {}", e)),
-    };
+        .map_err(|e| format!("Failed to request [AuthMethods2]: {}", e))?;
+    let input = response
+        .text()
+        .map_err(|e| format!("Failed to retrieve auth methods [AuthMethods2]: {}", e))?;
     // TODO: [ISSUE 6] Make this less hacky...
-    let auth_login_path = match get_attribute_value(&input, "method name=\"CitrixAGBasic\"", "url")
-    {
-        Ok(a) => a,
-        Err(e) => return Err(format!("Failed to get auth login path: {}", e)),
-    };
+    let auth_login_path = get_attribute_value(&input, "method name=\"CitrixAGBasic\"", "url")
+        .map_err(|e| format!("Failed to retrieve path [AuthMethods2]: {}", e))?;
 
-    // Log in to get CtxsAuthId cookie
-    let uri = match internal_url.join(&auth_login_path) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    match client
+    // [Login] Log in to get CtxsAuthId cookie
+    let uri = internal_url
+        .join(&auth_login_path)
+        .map_err(|e| format!("Failed to build URI [Login]: {}", e))?;
+    client
         .post(uri)
         .headers(
-            match common_headers(Some(&custom_headers), &settings.base_uri) {
-                Ok(h) => h,
-                Err(e) => return Err(e),
-            },
+            common_headers(Some(&custom_headers), &settings.base_uri)
+                .map_err(|e| format!("Failed to build headers [Login]: {}", e))?,
         )
         .header(CONTENT_LENGTH, "0")
         .send()
-    {
-        Ok(_) => (),
-        Err(e) => return Err(format!("Failed to log in: {}", e)),
-    };
+        .map_err(|e| format!("Failed to request [Login]: {}", e))?;
 
-    // Get list (should work) to populate ResponseList object
+    // [List2] Get list (should work) to populate ResponseList object
     let get_list_settings = &[("format", "json"), ("resourceDetails", "Default")];
-    let uri = match internal_url.join(&resource_list_path) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    let response = match client
+    let uri = internal_url
+        .join(&resource_list_path)
+        .map_err(|e| format!("Failed to build URI [List2]: {}", e))?;
+    let response = client
         .post(uri)
         .headers(
-            match common_headers(Some(&custom_headers), &settings.base_uri) {
-                Ok(h) => h,
-                Err(e) => return Err(e),
-            },
+            common_headers(Some(&custom_headers), &settings.base_uri)
+                .map_err(|e| format!("Failed to build headers [List2]: {}", e))?,
         )
         .form(get_list_settings)
         .send()
-    {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to get resource list: {}", e)),
-    };
+        .map_err(|e| format!("Failed to request [List2]: {}", e))?;
 
-    // Parse response into ResourceList object
-    let resource_list: Vec<Resource>;
-    let response_text = match response.text() {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to get response text: {}", e)),
-    };
-    match serde_json::from_str::<ResourceList>(response_text.as_str()) {
-        Ok(r) => match r.resources {
-            Some(r) => resource_list = r,
-            None => return Err("No resources found".to_string()),
-        },
-        Err(e) => return Err(format!("Error: {:?}", e)),
-    }
+    // [ParseList] Parse response into ResourceList object
+    let mut resource_list: Vec<Resource> = vec![];
+    let response_text = response
+        .text()
+        .map_err(|e| format!("Failed to get response text: {}", e))?;
+    serde_json::from_str::<ResourceList>(response_text.as_str())
+        .map_err(|e| format!("Failed to parse response text [ParseList]: {}", e))
+        .and_then(|r| r.resources.ok_or("No resources found".to_string()))
+        .map(|r| resource_list = r)?;
 
     // Get ICA URL for target resource
-    let url_result = match resource_list
+    let url_result = resource_list
         .iter()
         .find(|r| r.name == Some(settings.application_name.clone()))
-    {
-        Some(r) => match r.launchurl.clone() {
-            Some(u) => u,
-            None => return Err("No ICA URL found".to_string()),
-        },
-        None => return Err("Resource not found".to_string()),
-    };
+        .and_then(|r| r.launchurl.clone())
+        .ok_or("No ICA URL found".to_string())
+        .map_err(|e| format!("Failed to get ICA URL: {}", e))?;
 
-    // Get ICA file from StoreFront using full URL and validate
+    // [ICA] Get ICA file from StoreFront using full URL and validate
     // TODO: Add this url build to the url build function
     let file_name = "AutoLaunch.ica";
-    let url = match base_url.join(&format!("{}{}", &internal_url, &url_result)) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    let url = match url.join(&format!("?CsrfToken={}&IsUsingHttps=Yes", csrf_token)) {
-        Ok(u) => u,
-        Err(e) => return Err(format!("Failed to build URI: {}", e)),
-    };
-    let file_response = match client.get(url).send() {
-        Ok(r) => r,
-        Err(e) => return Err(format!("Failed to download file: {:?}", e)),
-    };
-    let mut file = match File::create(file_name) {
-        Ok(f) => f,
-        Err(e) => return Err(format!("Failed to create file: {:?}", e)),
-    };
-    let file_response = match file_response.bytes() {
-        Ok(f) => f,
-        Err(e) => return Err(format!("Failed to get file bytes: {:?}", e)),
-    };
-    let file_response_string = match from_utf8(&file_response) {
-        Ok(f) => f,
-        Err(e) => return Err(format!("Failed to convert file bytes: {:?}", e)),
-    };
+    let url = base_url
+        .join(&format!("{}{}", &internal_url, &url_result))
+        .map_err(|e| format!("Failed to build base URI [ICA]: {}", e))?;
+    let url = url
+        .join(&format!("?CsrfToken={}&IsUsingHttps=Yes", csrf_token))
+        .map_err(|e| format!("Failed to build full URI [ICA]: {}", e))?;
+    let file_response = client
+        .get(url)
+        .send()
+        .map_err(|e| format!("Failed to request [ICA]: {}", e))?;
+    let mut file =
+        File::create(file_name).map_err(|e| format!("Failed to create file: {:?}", e))?;
+    let file_response = file_response
+        .bytes()
+        .map_err(|e| format!("Failed to get file bytes: {:?}", e))?;
+    let file_response_string =
+        from_utf8(&file_response).map_err(|e| format!("Failed to convert file bytes: {:?}", e))?;
     if file_response_string.contains("[WFClient]") {
-        match copy(&mut file_response.as_ref(), &mut file) {
-            Ok(_) => Ok(file_name.to_string()),
-            Err(e) => Err(format!("Failed to write file: {:?}", e)),
-        }
+        copy(&mut file_response.as_ref(), &mut file)
+            .and_then(|_| Ok(file_name.to_string()))
+            .map_err(|e| format!("Failed to write file: {:?}", e))
     } else {
         Err("Invalid ICA file".to_string())
     }
