@@ -10,6 +10,7 @@ crypter = "0.2.1"
 hex = "0.4.3"
 open = "5.3.0"
 reqwest = { version = "0.12.7", features = ["blocking", "cookies"] }
+rpassword = "7.3.1"
 serde = { version = "1.0.210", features = ["derive"] }
 serde-xml-rs = "0.6.0"
 serde_json = "1.0.128"

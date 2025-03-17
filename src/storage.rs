@@ -1,6 +1,6 @@
 use crate::{
     crypto::{decrypt_string, encrypt_string},
-    io::{input, spit_and_log},
+    io::{input, pw_input, spit_and_log},
 };
 use reqwest::{blocking, Url};
 use serde::{Deserialize, Serialize};
@@ -80,7 +80,7 @@ fn create_settings(reason: &str) -> Result<Settings, String> {
     };
     let application_name: String = input("Application to launch: ");
     let login = input("Login: ");
-    let passwd = input("Password: ");
+    let passwd = pw_input("Password: ");
     let maximization_active = input("Maximize window on launch? (y/n): ") == "y";
     let target = match maximization_active {
         true => input("Title of window to maximize: "),

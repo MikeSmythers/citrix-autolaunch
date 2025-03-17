@@ -2,3 +2,4 @@
 *.txt
 *.ica
 Cargo.lock
+*.old

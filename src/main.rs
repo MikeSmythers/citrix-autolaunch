@@ -16,6 +16,7 @@ use storage::{launch_file, Settings};
 
 /// Application state options
 enum State {
+    NeedEncryptionKey,
     Initialization,
     ReadyToLogIn,
     ReadyToLaunch,
@@ -24,6 +25,9 @@ enum State {
 
 /// Baseline application logical flow
 /// - Check state
+///   - If encryption key is not set, generate one
+///     - Success moves on immediately
+///     - Errors result in a 5 second delay
 ///   - If wfica32.exe is running, try to maximize the target window
 ///     - 1 second delay before running again
 ///   - If settings are not loaded or invalid, attempt to load or get them
@@ -43,6 +47,9 @@ fn main() {
         // Check and set state
         if ica_is_running() {
             state = State::Active;
+        } else if false {
+            // TODO: Implement encryption key check
+            state = State::NeedEncryptionKey;
         } else if settings.is_empty() || !settings.is_valid() {
             state = State::Initialization;
         } else if file_name.is_empty() {
@@ -52,6 +59,9 @@ fn main() {
         }
         // Perform actions based on state
         match state {
+            State::NeedEncryptionKey => {
+                // TODO: Implement encryption key generation
+            }
             State::Initialization => {
                 // Attempt to get settings from file or user input
                 spit_and_log("Initializing...");

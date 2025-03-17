@@ -19,6 +19,25 @@ pub fn input(prompt: &str) -> String {
     input.trim().to_string()
 }
 
+/// Get password from the console
+/// - Accepts a prompt string
+/// - Returns the trimmed input as a String
+pub fn pw_input(prompt: &str) -> String {
+    let mut success = false;
+    let mut password = String::new();
+    while !success {
+        let result = rpassword::prompt_password(prompt);
+        match result {
+            Ok(pw) => {
+                success = true;
+                password = pw;
+            }
+            Err(_) => (),
+        }
+    }
+    password
+}
+
 /// Print to console
 /// - Accepts any type that implements Display
 /// - Prints only this content and a newline
