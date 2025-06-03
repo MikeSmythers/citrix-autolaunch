@@ -1,31 +1,5 @@
 use reqwest::header::HeaderMap;
 
-/// Get the value of an element from an HTML body
-/// - Accepts the body as a string and the element name as a string
-/// - Returns the value of the element as a String
-pub fn get_element_value(body: &str, element: &str) -> Result<String, String> {
-    let element_tag = format!("<{}", element.to_lowercase());
-    let closing_tag = format!("</{}", element.to_lowercase());
-    // find index of element in body
-    let start = match body.to_lowercase().find(&element_tag) {
-        Some(i) => i + element_tag.len(),
-        None => return Err(format!("Element not found: {}", element).to_string()),
-    };
-    let start = match body[start..].find('>') {
-        Some(i) => start + i + 1,
-        None => return Err(format!("Element tag failed to terminate: {}", element).to_string()),
-    };
-    // find index of closing tag in body
-    let end = match body[start..].to_lowercase().find(&closing_tag) {
-        Some(i) => start + i,
-        None => {
-            return Err(format!("Element value \"{}\" failed to terminate", element).to_string())
-        }
-    };
-    // return element value
-    Ok(body[start..end].to_string())
-}
-
 /// Get the value of an attribute from an HTML or XML element
 /// - Accepts a response body as String, the element name as a String, and the attribute name as a String
 /// - Returns the value of the attribute as a String
